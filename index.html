@@ -214,7 +214,7 @@
     const { data, error } = await supabase
       .from(TABLE)
       .select('id, name')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) { setStatus('Error loading items: ' + error.message, true); return; }
     setStatus('');
