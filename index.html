@@ -177,6 +177,8 @@
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  let items = [];
+
   const listEl    = document.getElementById('list');
   const statusEl  = document.getElementById('status');
   const inputEl   = document.getElementById('item-input');
@@ -210,40 +212,54 @@
   }
 
   async function loadItems() {
-    setStatus('Loading…');
     const { data, error } = await supabase
       .from(TABLE)
       .select('id, name')
       .order('created_at', { ascending: false });
 
     if (error) { setStatus('Error loading items: ' + error.message, true); return; }
-    setStatus('');
-    renderItems(data);
+    items = data;
+    renderItems(items);
   }
 
   async function addItem(name) {
-    addBtn.disabled = true;
-    setStatus('Adding…');
-    const { error } = await supabase.from(TABLE).insert({ name });
-    addBtn.disabled = false;
-    if (error) { setStatus('Error adding item: ' + error.message, true); return; }
-    setStatus('');
+    // Optimistic: show immediately with a temp id
+    const tempId = 'temp-' + Date.now();
+    items.unshift({ id: tempId, name });
+    renderItems(items);
     inputEl.value = '';
-    await loadItems();
+
+    const { data, error } = await supabase.from(TABLE).insert({ name }).select('id, name').single();
+    if (error) {
+      items = items.filter(i => i.id !== tempId);
+      renderItems(items);
+      setStatus('Error adding item: ' + error.message, true);
+      return;
+    }
+    // Replace temp with real record
+    items = items.map(i => i.id === tempId ? data : i);
+    renderItems(items);
   }
 
   async function deleteItem(id) {
-    setStatus('Deleting…');
+    // Optimistic: remove immediately
+    const backup = [...items];
+    items = items.filter(i => i.id !== id);
+    renderItems(items);
+
     const { error } = await supabase.from(TABLE).delete().eq('id', id);
-    if (error) { setStatus('Error deleting item: ' + error.message, true); return; }
-    setStatus('');
-    await loadItems();
+    if (error) {
+      items = backup;
+      renderItems(items);
+      setStatus('Error deleting item: ' + error.message, true);
+    }
   }
 
   form.addEventListener('submit', e => {
     e.preventDefault();
     const name = inputEl.value.trim();
     if (name) addItem(name);
+    inputEl.focus();
   });
 
   listEl.addEventListener('click', e => {
