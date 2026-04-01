@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shopping List</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .add-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .add-form input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      outline: none;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+
+    .add-form input:focus {
+      border-color: #4f8ef7;
+    }
+
+    .add-form button {
+      padding: 0.75rem 1.25rem;
+      background: #4f8ef7;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.25rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      line-height: 1;
+    }
+
+    .add-form button:hover { background: #3a7de8; }
+    .add-form button:disabled { background: #a0c0f8; cursor: not-allowed; }
+
+    #status {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 1rem;
+      min-height: 1.2em;
+    }
+
+    #status.error { color: #e05252; }
+
+    ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    li {
+      background: #fff;
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      animation: fadeIn 0.15s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .item-name {
+      font-size: 1rem;
+      color: #1a1a1a;
+      word-break: break-word;
+      flex: 1;
+    }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: #ccc;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 0.25rem 0.4rem;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+      margin-left: 0.75rem;
+    }
+
+    .delete-btn:hover { color: #e05252; background: #fef0f0; }
+
+    .empty {
+      text-align: center;
+      color: #bbb;
+      font-size: 0.95rem;
+      padding: 2rem 0;
+    }
+
+    /* CONFIG WARNING — shown when placeholder keys are detected */
+    #config-warning {
+      background: #fff8e1;
+      border: 2px solid #ffc107;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      color: #7a5800;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🛒 Shopping List</h1>
+
+  <div id="config-warning">
+    ⚠️ <strong>Setup required:</strong> Open <code>index.html</code> and fill in your
+    <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code>.
+    See <code>README.md</code> for instructions.
+  </div>
+
+  <form class="add-form" id="add-form">
+    <input type="text" id="item-input" placeholder="Add an item…" autocomplete="off" />
+    <button type="submit" id="add-btn">+</button>
+  </form>
+
+  <div id="status"></div>
+  <ul id="list"></ul>
+</div>
+
+<script type="module">
+  // ─── CONFIG — fill these in before deploying ──────────────────────────────
+  const SUPABASE_URL      = 'https://nhuytrauajvmfqlqxecb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_YjwQ1rcTXfw1Di026OuA5Q_i2zz0vs3';
+  // ─────────────────────────────────────────────────────────────────────────
+
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  const TABLE = 'shopping_items';
+
+  // Show warning if config not filled in
+  if (SUPABASE_URL.startsWith('YOUR_') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
+    document.getElementById('config-warning').style.display = 'block';
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const listEl    = document.getElementById('list');
+  const statusEl  = document.getElementById('status');
+  const inputEl   = document.getElementById('item-input');
+  const addBtn    = document.getElementById('add-btn');
+  const form      = document.getElementById('add-form');
+
+  function setStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.className = isError ? 'error' : '';
+  }
+
+  function renderItems(items) {
+    listEl.innerHTML = '';
+    if (!items.length) {
+      listEl.innerHTML = '<p class="empty">Your list is empty — add something!</p>';
+      return;
+    }
+    items.forEach(item => {
+      const li = document.createElement('li');
+      li.dataset.id = item.id;
+      li.innerHTML = `
+        <span class="item-name">${escapeHtml(item.name)}</span>
+        <button class="delete-btn" aria-label="Delete" data-id="${item.id}">🗑</button>
+      `;
+      listEl.appendChild(li);
+    });
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function loadItems() {
+    setStatus('Loading…');
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('id, name')
+      .order('created_at', { ascending: true });
+
+    if (error) { setStatus('Error loading items: ' + error.message, true); return; }
+    setStatus('');
+    renderItems(data);
+  }
+
+  async function addItem(name) {
+    addBtn.disabled = true;
+    setStatus('Adding…');
+    const { error } = await supabase.from(TABLE).insert({ name });
+    addBtn.disabled = false;
+    if (error) { setStatus('Error adding item: ' + error.message, true); return; }
+    setStatus('');
+    inputEl.value = '';
+    await loadItems();
+  }
+
+  async function deleteItem(id) {
+    setStatus('Deleting…');
+    const { error } = await supabase.from(TABLE).delete().eq('id', id);
+    if (error) { setStatus('Error deleting item: ' + error.message, true); return; }
+    setStatus('');
+    await loadItems();
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const name = inputEl.value.trim();
+    if (name) addItem(name);
+  });
+
+  listEl.addEventListener('click', e => {
+    const btn = e.target.closest('.delete-btn');
+    if (btn) deleteItem(btn.dataset.id);
+  });
+
+  loadItems();
+</script>
+</body>
+</html>
