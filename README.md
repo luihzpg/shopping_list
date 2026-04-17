@@ -58,6 +58,22 @@ Your app will be live at:
 https://YOUR_USERNAME.github.io/YOUR_REPO/
 ```
 
+### 7. Prevent Supabase free-tier pausing
+
+If your project is on Supabase's free plan, add these repository secrets in GitHub:
+
+- `SUPABASE_URL` → your project URL, for example `https://xxxx.supabase.co`
+- `SUPABASE_ANON_KEY` → your anon public API key
+
+This repo includes [`.github/workflows/supabase-keepalive.yml`](.github/workflows/supabase-keepalive.yml), which:
+
+- runs on a daily GitHub Actions schedule
+- performs the keepalive only once every 3 days
+- inserts a temporary `__keepalive__...` row into `shopping_items`
+- immediately deletes that same row
+
+You can also run it manually from the GitHub Actions tab with `workflow_dispatch`.
+
 ---
 
 ## Local development
@@ -75,5 +91,6 @@ Make sure your Supabase credentials are filled in.
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml         # Auto-deploy to GitHub Pages
+│       └── supabase-keepalive.yml
 └── README.md
 ```
